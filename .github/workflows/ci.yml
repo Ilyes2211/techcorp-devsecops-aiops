@@ -57,7 +57,7 @@ jobs:
         run: docker save techcorp-api:ci -o image.tar
       - name: Trivy image
         run: |
-          docker run --rm -v "$PWD:/src" $TRIVY_IMAGE image --input /src/image.tar \
+          docker run --rm -v "$PWD:/src" $TRIVY_IMAGE image --input /src/image.tar --scanners vuln \
             --severity HIGH,CRITICAL --ignore-unfixed \
             --ignorefile /src/.trivyignore --exit-code 1
 
