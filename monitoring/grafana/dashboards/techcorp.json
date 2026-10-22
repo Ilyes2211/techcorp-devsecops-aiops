@@ -1,0 +1,51 @@
+{
+  "title": "TECHCORP Orders API",
+  "uid": "techcorp-orders",
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Disponibilité cible (up)",
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "techcorp-prom" },
+      "targets": [{ "refId": "A", "expr": "up{job=\"techcorp-api\"}" }],
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] },
+        "color": { "mode": "thresholds" } }, "overrides": [] }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Taux d'erreur HTTP 500 (%)",
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "techcorp-prom" },
+      "targets": [{ "refId": "A", "expr": "100 * (sum(rate(techcorp_http_requests_total{path=\"/orders\",status=\"500\"}[1m])) or vector(0)) / clamp_min(sum(rate(techcorp_http_requests_total{path=\"/orders\"}[1m])), 0.001)" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }] },
+        "color": { "mode": "thresholds" } }, "overrides": [] }
+    },
+    {
+      "id": 3, "type": "stat", "title": "HTTP 500 sur 1 min (règle ElevatedHTTP500 si >= 3)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "techcorp-prom" },
+      "targets": [{ "refId": "A", "expr": "sum(increase(techcorp_http_requests_total{status=\"500\"}[1m])) or vector(0)" }],
+      "fieldConfig": { "defaults": { "decimals": 0,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 3 }] },
+        "color": { "mode": "thresholds" } }, "overrides": [] }
+    },
+    {
+      "id": 4, "type": "timeseries", "title": "Débit HTTP par code (req/s)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "techcorp-prom" },
+      "targets": [{ "refId": "A", "expr": "sum by (status) (rate(techcorp_http_requests_total{path=\"/orders\"}[1m]))", "legendFormat": "HTTP {{status}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Latence p95 /orders",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "techcorp-prom" },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(techcorp_request_duration_seconds_bucket{path=\"/orders\"}[1m])))", "legendFormat": "p95" }],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    }
+  ]
+}
