@@ -1,0 +1,9 @@
+title = "TECHCORP gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "techcorp-fake-secret"
+description = "Marqueur de secret FICTIF utilisé pour la démonstration A4"
+regex = '''TECHCORP_FAKE_[A-Z0-9]{20}'''

@@ -1,20 +1,77 @@
 name: TECHCORP Security CI
+
 on:
   push:
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_IMAGE: zricethezav/gitleaks:v8.21.2
+  TRIVY_IMAGE: aquasec/trivy:0.58.1
+
 jobs:
-  test-and-audit:
+  tests:
+    name: Tests Pytest
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - run: python -m pip install pytest
       - run: python -m pytest -q
+
+  secrets:
+    name: Secret scan (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" $GITLEAKS_IMAGE \
+            dir /repo --config /repo/.gitleaks.toml --redact --verbose --exit-code 1
+
+  dependencies:
+    name: Dependency scan (Trivy fs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Trivy filesystem
+        run: |
+          docker run --rm -v "$PWD:/src" $TRIVY_IMAGE fs /src \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --ignorefile /src/.trivyignore --exit-code 1
+
+  image:
+    name: Image build + scan (Trivy image)
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - uses: actions/checkout@v5
       - name: Docker build
         run: docker build -t techcorp-api:ci .
-      # TODO (students): integrate secret scan and vulnerability scan with pinned actions.
-      # TODO: implement security gate based on approved risk policy.
+      - name: Export image (pas de socket Docker monté dans Trivy)
+        run: docker save techcorp-api:ci -o image.tar
+      - name: Trivy image
+        run: |
+          docker run --rm -v "$PWD:/src" $TRIVY_IMAGE image --input /src/image.tar \
+            --severity HIGH,CRITICAL --ignore-unfixed \
+            --ignorefile /src/.trivyignore --exit-code 1
+
+  quality-gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    needs: [tests, secrets, dependencies, image]
+    if: always()
+    steps:
+      - name: Décision
+        run: |
+          echo "tests=${{ needs.tests.result }} secrets=${{ needs.secrets.result }} deps=${{ needs.dependencies.result }} image=${{ needs.image.result }}"
+          if [ "${{ needs.tests.result }}" != "success" ] || [ "${{ needs.secrets.result }}" != "success" ] \
+             || [ "${{ needs.dependencies.result }}" != "success" ] || [ "${{ needs.image.result }}" != "success" ]; then
+            echo "::error::Quality gate KO : livraison bloquée"; exit 1
+          fi
+          echo "Quality gate OK : livraison autorisée"
